@@ -1,18 +1,51 @@
 class Vector2 {
-    x: number;
-    y: number;
+    public x: number;
+    public y: number;
 
-    constructor(x?: number, y?: number) {
+    public constructor(x?: number, y?: number) {
         this.x = x ?? 0;
         this.y = y ?? 0;
+    }
+
+    public add(other: Vector2) {
+        this.x += other.x;
+        this.y += other.y;
+    }
+
+    public subtract(other: Vector2) {
+        this.x -= other.x;
+        this.y -= other.y;
+    }
+
+    public length(): number {
+        return this.x * this.y;
+    }
+
+    public normalize() {
+        const length = this.length();
+        this.x /= length;
+        this.y /= length;
+    }
+
+    public static add(a: Vector2, b: Vector2): Vector2 {
+        return new Vector2(a.x + b.x, a.y + b.y);
+    }
+
+    public static subtract(a: Vector2, b: Vector2): Vector2 {
+        return new Vector2(a.x - b.x, a.y - b.y);
+    }
+
+    public static normalize(a: Vector2): Vector2 {
+        const length = a.length();
+        return new Vector2(a.x / length, a.y / length);
     }
 }
 
 class Line {
-    start: Vector2 = new Vector2();
-    end: Vector2 = new Vector2();
+    public start: Vector2 = new Vector2();
+    public end: Vector2 = new Vector2();
 
-    constructor(start?: Vector2, end?: Vector2) {
+    public constructor(start?: Vector2, end?: Vector2) {
         this.start = start ?? new Vector2();
         this.end = end ?? new Vector2();
     }
@@ -33,9 +66,13 @@ abstract class GlyphSegment {
     private structure: Line[];
 
     public constructor(structure: Line[]) {
-        this.phonetic = "";
+        this.phonetic = '';
         this.structure = structure;
-        this.mapping = Array<boolean>(structure.length);
+        this.mapping = Array.from(structure, () => false);
+    }
+
+    public getCount(): number {
+        return this.mapping.length;
     }
 
     public getPhonetic(): string {
@@ -60,6 +97,30 @@ abstract class GlyphSegment {
             context.lineTo(position.x + size.x * line.end.x, position.y + size.y * line.end.y);
             context.stroke();
         }
+    }
+
+    public drawActivePass(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, color: string, active: boolean) {
+        for (let index = 0; index < this.structure.length; index++) {
+            const line = this.structure[index];
+            if (this.mapping[index] == active) {
+                context.strokeStyle = color;
+                context.beginPath();
+                context.moveTo(position.x + size.x * line.start.x, position.y + size.y * line.start.y);
+                context.lineTo(position.x + size.x * line.end.x, position.y + size.y * line.end.y);
+                context.stroke();
+            }
+        }
+    }
+
+    public getValue(index: number): boolean {
+        if (index >= 0 && index < this.mapping.length)
+            return this.mapping[index];
+        return false;
+    }
+
+    public setValue(index: number, value: boolean) {
+        if (index >= 0 && index < this.mapping.length)
+            this.mapping[index] = value;
     }
 }
 
@@ -105,18 +166,28 @@ class ConsonantGlyphSegment extends GlyphSegment {
 }
 
 class TunicGlyph {
-    private vowel: VowelGlyphSegment;
-    private consonant: ConsonantGlyphSegment;
+    protected vowel: VowelGlyphSegment;
+    protected consonant: ConsonantGlyphSegment;
 
     public constructor(vowel?: VowelGlyphSegment, consonant?: ConsonantGlyphSegment) {
         this.vowel = vowel ?? new VowelGlyphSegment();
         this.consonant = consonant ?? new ConsonantGlyphSegment();
     }
 
-    public draw(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, activeColor: string, inactiveColor: string) {
-        context.lineWidth = 2;
+    public draw(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, activeColor: string, inactiveColor: string, lineWidth = 2) {
+        context.lineWidth = lineWidth;
+        context.lineCap = "round";
         this.vowel.draw(context, position, size, activeColor, inactiveColor);
         this.consonant.draw(context, position, size, activeColor, inactiveColor);
+    }
+
+    public drawMultiPass(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, activeColor: string, inactiveColor: string, lineWidth = 2) {
+        context.lineWidth = lineWidth;
+        context.lineCap = "round";
+        this.vowel.drawActivePass(context, position, size, inactiveColor, false);
+        this.consonant.drawActivePass(context, position, size, inactiveColor, false);
+        this.vowel.drawActivePass(context, position, size, activeColor, true);
+        this.consonant.drawActivePass(context, position, size, activeColor, true);
     }
 
     public getPhonetic(): string {
@@ -148,9 +219,9 @@ class TunicString {
     }
 }
 
-const BLACK: string = "#000";
-const GRAY: string = "#AAA";
-const TRANSPARENT: string = "#ffffff00";
+const BLACK: string = '#000';
+const GRAY: string = '#AAA';
+const TRANSPARENT: string = '#ffffff00';
 
 class TunicText {
     private textCanvas: HTMLCanvasElement = {} as HTMLCanvasElement;
@@ -162,7 +233,6 @@ class TunicText {
     private params: URLSearchParams;
     private fontSize = new Vector2(20, 30);
 
-    private glyph: TunicGlyph = new TunicGlyph();
     private text: TunicString = new TunicString();
 
     private editor: GlyphEditor;
@@ -181,13 +251,8 @@ class TunicText {
         this.text.draw(this.textContext, new Vector2(10, 10), this.fontSize, 3, BLACK, GRAY);
     }
 
-    public drawEditor() {
-        this.glyphContext.clearRect(0, 0, this.glyphCanvas.width, this.glyphCanvas.height);
-        this.glyph.draw(this.glyphContext, new Vector2(10, 10), new Vector2(this.glyphCanvas.width - 20, this.glyphCanvas.height - 20), BLACK, GRAY);
-    }
-
-    public addGlyph() {
-        this.text.add(this.glyph.clone());
+    public addGlyph(glyph: TunicGlyph) {
+        this.text.add(glyph.clone());
 
         this.draw();
     }
@@ -196,14 +261,14 @@ class TunicText {
         this.initializeCanvas('text-canvas', (canvas, context) => { this.textCanvas = canvas; this.textContext = context });
         this.initializeCanvas('glyph-canvas', (canvas, context) => { this.glyphCanvas = canvas; this.glyphContext = context });
 
-        this.editor.initialize();
+        this.editor.initialize(this.glyphCanvas, this.glyphContext);
     }
 
     private initializeCanvas(id: string, out: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => void) {
         let canvas = <HTMLCanvasElement>document.getElementById(id);
         let context = canvas.getContext('2d');
         if (context == null) {
-            console.error("Could not create context");
+            console.error('Could not create context');
             return;
         }
 
@@ -212,15 +277,94 @@ class TunicText {
     }
 }
 
+class EditorTunicGlyph extends TunicGlyph {
+    public getTotalCount(out?: (vowelCount: number, consonant: number) => void): number {
+        if (out != null)
+            out(this.vowel.getCount(), this.consonant.getCount());
+        return this.vowel.getCount() + this.consonant.getCount();
+    }
+
+    public getSegment(index: number): boolean {
+        if (index < this.vowel.getCount())
+            return this.vowel.getValue(index);
+        else
+            return this.consonant.getValue(index - this.vowel.getCount());
+    }
+
+    public setSegment(index: number, value: boolean) {
+        if (index < this.vowel.getCount())
+            this.vowel.setValue(index, value);
+        else
+            this.consonant.setValue(index - this.vowel.getCount(), value);
+    }
+}
+
+class EditorHandler {
+
+}
+
 class GlyphEditor {
     private tunicText: TunicText;
+    private glyph: EditorTunicGlyph = new EditorTunicGlyph();
+    private editorControls: HTMLElement = {} as HTMLElement;
+    private canvas: HTMLCanvasElement = {} as HTMLCanvasElement;
+    private context: CanvasRenderingContext2D = {} as CanvasRenderingContext2D;
 
     public constructor(tunicText: TunicText) {
         this.tunicText = tunicText;
     }
 
-    public initialize() {
-        this.tunicText.drawEditor();
+    public initialize(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
+        this.canvas = canvas;
+        this.context = context;
+
+        let editorControls = document.getElementById('editor_controls');
+        if (editorControls == null) {
+            console.error('Could not find "editor_controls"');
+            return;
+        }
+        this.editorControls = editorControls;
+
+        let vowelSegmentCount = 0;
+        let consonantSegmentCount = 0;
+        this.glyph.getTotalCount((vowelCount, consonantCount) => { vowelSegmentCount = vowelCount; consonantSegmentCount = consonantCount; });
+        this.addContainer('Vowel', vowelSegmentCount, 0);
+        this.addContainer('Constants', consonantSegmentCount, vowelSegmentCount);
+        this.draw();
+    }
+
+    private addContainer(heading: string, count: number, indexOffset: number) {
+        const container = document.createElement('fieldset');
+        container.className = 'editor_box';
+        const headingElement = document.createElement('legend');
+        headingElement.innerText = heading;
+        container.appendChild(headingElement);
+
+        for (let index = 0; index < count; index++) {
+            const name = heading + '_' + index;
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = (index + indexOffset).toString();
+            checkbox.name = name;
+            checkbox.onclick = () => { this.checkboxClicked(checkbox); };
+            container.appendChild(checkbox);
+            const label = document.createElement('label');
+            label.setAttribute('for', name);
+            label.innerText = index.toString();
+            container.appendChild(label);
+        }
+        this.editorControls.appendChild(container);
+    }
+
+    private checkboxClicked(checkbox: HTMLInputElement) {
+        const index = parseInt(checkbox.value);
+        this.glyph.setSegment(index, checkbox.checked);
+        this.draw();
+    }
+
+    private draw() {
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.glyph.drawMultiPass(this.context, new Vector2(10, 10), new Vector2(this.canvas.width - 20, this.canvas.height - 20), BLACK, GRAY, 10);
     }
 }
 
