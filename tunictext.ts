@@ -87,19 +87,7 @@ abstract class GlyphSegment {
         }
     }
 
-    public draw(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, activeColor: string, inactiveColor: string) {
-        for (let index = 0; index < this.structure.length; index++) {
-            const line = this.structure[index];
-            const isActive = this.mapping[index];
-            context.strokeStyle = isActive ? activeColor : inactiveColor;
-            context.beginPath();
-            context.moveTo(position.x + size.x * line.start.x, position.y + size.y * line.start.y);
-            context.lineTo(position.x + size.x * line.end.x, position.y + size.y * line.end.y);
-            context.stroke();
-        }
-    }
-
-    public drawActivePass(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, color: string, active: boolean) {
+    public draw(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, color: string, active: boolean) {
         for (let index = 0; index < this.structure.length; index++) {
             const line = this.structure[index];
             if (this.mapping[index] == active) {
@@ -122,9 +110,53 @@ abstract class GlyphSegment {
         if (index >= 0 && index < this.mapping.length)
             this.mapping[index] = value;
     }
+
+    public detectPhonetic(): boolean {
+        this.phonetic = '';
+        const ownPattern = this.export();
+        const patterns = this.getPatterns();
+        const value = patterns.get(ownPattern);
+        if (value != undefined) {
+            this.phonetic = value;
+            return true;
+        }
+        return false;
+    }
+
+    public export(): string {
+        let output = '';
+        this.mapping.forEach(element => {
+            output += element ? '1' : '0';
+        });
+        return output;
+    }
+
+    protected abstract getPatterns(): Map<string, string>;
 }
 
 class VowelGlyphSegment extends GlyphSegment {
+
+    private patterns: Map<string, string> = new Map([
+        ['110001', 'ɑː'],
+        ['100001', 'o'],
+        ['000110', 'ə'],
+        ['000111', '_'],
+        ['000011', 'u'],
+        ['110000', 'ə'],
+        ['100111', 'ɪ'],
+        ['110011', 'uː'],
+        ['010111', '_'],
+        ['110101', '_'],
+        ['110110', '_'],
+        ['100101', '_'],
+        ['100000', 'eɪ'],
+        ['010000', 'aɪ'],
+        ['000010', '_'],
+        ['000100', '_'],
+        ['110111', 'oʊ'],
+        ['000101', '_'],
+    ]);
+
     constructor() {
         super([
             new Line(TOP_LEFT_ANCHOR, TOP_ANCHOR),
@@ -142,9 +174,40 @@ class VowelGlyphSegment extends GlyphSegment {
         segment.mapping = Object.assign([], this.mapping);
         return segment;
     }
+
+    protected getPatterns(): Map<string, string> {
+        return this.patterns;
+    }
 }
 
 class ConsonantGlyphSegment extends GlyphSegment {
+    private patterns: Map<string, string> = new Map([
+        ['0000101', '_'],
+        ['0100101', 'n'],
+        ['1111111', '_'],
+        ['1001010', 'p'],
+        ['1010001', 'b'],
+        ['1101010', 't'],
+        ['1010101', 'd'],
+        ['1011001', 'k'],
+        ['1001011', 'g'],
+        ['1010100', 'dʒ'],
+        ['1100010', '_'],
+        ['1001110', 'f'],
+        ['1110001', '_'],
+        ['1111010', '_'],
+        ['1010111', 'ð'],
+        ['1011110', 's'],
+        ['1110011', 'z'],
+        ['1101111', 'ʃ'],
+        ['1111101', '_'],
+        ['1010011', 'h'],
+        ['1011010', 'r'],
+        ['1100010', 'j'],
+        ['0101000', 'v'],
+        ['1010010', 'l'],
+    ]);
+
     constructor() {
         super([
             new Line(INNER_TOP_ANCHOR, INNER_BOTTOM_ANCHOR),
@@ -163,6 +226,10 @@ class ConsonantGlyphSegment extends GlyphSegment {
         segment.mapping = Object.assign([], this.mapping);
         return segment;
     }
+
+    protected getPatterns(): Map<string, string> {
+        return this.patterns;
+    }
 }
 
 class TunicGlyph {
@@ -174,20 +241,20 @@ class TunicGlyph {
         this.consonant = consonant ?? new ConsonantGlyphSegment();
     }
 
-    public draw(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, activeColor: string, inactiveColor: string, lineWidth = 2) {
+    public draw(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, color: string, lineWidth = 2) {
         context.lineWidth = lineWidth;
         context.lineCap = "round";
-        this.vowel.draw(context, position, size, activeColor, inactiveColor);
-        this.consonant.draw(context, position, size, activeColor, inactiveColor);
+        this.vowel.draw(context, position, size, color, true);
+        this.consonant.draw(context, position, size, color, true);
     }
 
     public drawMultiPass(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, activeColor: string, inactiveColor: string, lineWidth = 2) {
         context.lineWidth = lineWidth;
         context.lineCap = "round";
-        this.vowel.drawActivePass(context, position, size, inactiveColor, false);
-        this.consonant.drawActivePass(context, position, size, inactiveColor, false);
-        this.vowel.drawActivePass(context, position, size, activeColor, true);
-        this.consonant.drawActivePass(context, position, size, activeColor, true);
+        this.vowel.draw(context, position, size, inactiveColor, false);
+        this.consonant.draw(context, position, size, inactiveColor, false);
+        this.vowel.draw(context, position, size, activeColor, true);
+        this.consonant.draw(context, position, size, activeColor, true);
     }
 
     public getPhonetic(): string {
@@ -210,12 +277,22 @@ class TunicString {
         this.glyphs.push(glyph);
     }
 
-    public draw(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, kerning: number, activeColor: string, inactiveColor: string) {
+    public draw(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, kerning: number, color: string) {
         for (let index = 0; index < this.glyphs.length; index++) {
             const glyph = this.glyphs[index];
             const glyphPosition = new Vector2(position.x + (size.x + kerning) * index, position.y);
-            glyph.draw(context, glyphPosition, size, activeColor, inactiveColor);
+            glyph.draw(context, glyphPosition, size, color);
         }
+    }
+
+    public drawPhonetics(context: CanvasRenderingContext2D, position: Vector2, color: string) {
+        const text = Array.from(this.glyphs, glyph => glyph.getPhonetic()).join('');
+        context.fillStyle = color;
+        context.font = '20px sans-serif';
+        context.fillText(text, position.x, position.y + 20);
+    }
+    public clear() {
+        this.glyphs = [];
     }
 }
 
@@ -248,12 +325,13 @@ class TunicText {
 
     public draw() {
         this.textContext.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
-        this.text.draw(this.textContext, new Vector2(10, 10), this.fontSize, 3, BLACK, GRAY);
+        this.text.draw(this.textContext, new Vector2(10, 10), this.fontSize, 3, BLACK);
+
+        this.text.drawPhonetics(this.textContext, new Vector2(10, 10 + this.fontSize.y + 10), BLACK);
     }
 
     public addGlyph(glyph: TunicGlyph) {
         this.text.add(glyph.clone());
-
         this.draw();
     }
 
@@ -274,6 +352,11 @@ class TunicText {
 
         context.clearRect(0, 0, canvas.width, canvas.height);
         out(canvas, context);
+    }
+
+    public clear() {
+        this.text.clear();
+        this.draw();
     }
 }
 
@@ -297,10 +380,27 @@ class EditorTunicGlyph extends TunicGlyph {
         else
             this.consonant.setValue(index - this.vowel.getCount(), value);
     }
-}
 
-class EditorHandler {
+    public export(): string {
+        return `${this.vowel.export()}|${this.vowel.getPhonetic()}|${this.consonant.export()}|${this.consonant.getPhonetic()}`;
+    }
 
+    public import(input: string) {
+        const splitInput = input.split('|');
+        if (splitInput.length != 4) {
+            console.error('Could not import: Pattern invalid.');
+            return;
+        }
+        const vowelPattern = Array.from(splitInput[0], c => c === '1');
+        this.vowel.setLetter(splitInput[1], vowelPattern);
+        const consonantPattern = Array.from(splitInput[2], c => c === '1');
+        this.consonant.setLetter(splitInput[3], consonantPattern);
+    }
+
+    public detectPhonetics() {
+        this.vowel.detectPhonetic();
+        this.consonant.detectPhonetic();
+    }
 }
 
 class GlyphEditor {
@@ -309,6 +409,9 @@ class GlyphEditor {
     private editorControls: HTMLElement = {} as HTMLElement;
     private canvas: HTMLCanvasElement = {} as HTMLCanvasElement;
     private context: CanvasRenderingContext2D = {} as CanvasRenderingContext2D;
+
+    private checkboxes: HTMLInputElement[] = [];
+    private exportText: HTMLInputElement = {} as HTMLInputElement;
 
     public constructor(tunicText: TunicText) {
         this.tunicText = tunicText;
@@ -330,15 +433,30 @@ class GlyphEditor {
         this.glyph.getTotalCount((vowelCount, consonantCount) => { vowelSegmentCount = vowelCount; consonantSegmentCount = consonantCount; });
         this.addContainer('Vowel', vowelSegmentCount, 0);
         this.addContainer('Constants', consonantSegmentCount, vowelSegmentCount);
+
+        const container = this.createContainer('Tools');
+        container.appendChild(this.createButton('Reset', () => { this.reset(0, vowelSegmentCount + consonantSegmentCount); }));
+        container.appendChild(this.createButton('Add Glyph', () => {
+            this.tunicText.addGlyph(this.glyph.clone());
+        }));
+        this.exportText = document.createElement('input');
+        this.exportText.type = 'text';
+        container.appendChild(this.exportText);
+        container.appendChild(this.createButton('Import', () => {
+            this.glyph.import(this.exportText.value);
+            this.draw();
+        }));
+        container.appendChild(this.createButton('Clear', () => {
+            this.tunicText.clear();
+        }));
+        this.editorControls.appendChild(container);
+
+        this.refreshExport();
         this.draw();
     }
 
     private addContainer(heading: string, count: number, indexOffset: number) {
-        const container = document.createElement('fieldset');
-        container.className = 'editor_box';
-        const headingElement = document.createElement('legend');
-        headingElement.innerText = heading;
-        container.appendChild(headingElement);
+        const container = this.createContainer(heading);
 
         for (let index = 0; index < count; index++) {
             const name = heading + '_' + index;
@@ -348,18 +466,53 @@ class GlyphEditor {
             checkbox.name = name;
             checkbox.onclick = () => { this.checkboxClicked(checkbox); };
             container.appendChild(checkbox);
+            this.checkboxes.push(checkbox);
             const label = document.createElement('label');
             label.setAttribute('for', name);
             label.innerText = index.toString();
             container.appendChild(label);
         }
+        const resetButton = this.createButton('Reset', () => { this.reset(indexOffset, indexOffset + count); });
+        container.appendChild(resetButton);
         this.editorControls.appendChild(container);
+    }
+
+    private createButton(text: string, onclick: () => void): HTMLButtonElement {
+        const button = document.createElement('button');
+        button.innerText = text;
+        button.onclick = onclick;
+        return button;
+    }
+
+    private createContainer(heading: string) {
+        const container = document.createElement('fieldset');
+        container.className = 'editor_box';
+        const headingElement = document.createElement('legend');
+        headingElement.innerText = heading;
+        container.appendChild(headingElement);
+        return container;
     }
 
     private checkboxClicked(checkbox: HTMLInputElement) {
         const index = parseInt(checkbox.value);
         this.glyph.setSegment(index, checkbox.checked);
+        this.glyph.detectPhonetics();
+        this.refreshExport();
         this.draw();
+    }
+
+    private reset(start: number, end: number) {
+        for (let index = start; index < end; index++) {
+            this.glyph.setSegment(index, false);
+            this.checkboxes[index].checked = false;
+        }
+        this.glyph.detectPhonetics();
+        this.refreshExport();
+        this.draw();
+    }
+
+    private refreshExport() {
+        this.exportText.value = this.glyph.export();
     }
 
     private draw() {
