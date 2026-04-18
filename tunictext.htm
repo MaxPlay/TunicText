@@ -13,11 +13,17 @@
     <h1>Tunic Text</h1>
 
     <main>
-        <div>
-            <canvas id="text-canvas" height="600" width="800">
+        <div class="area" style="grid-area: main;">
+            <h2>Output</h2>
+            <canvas id="text-canvas" height="400" width="800">
             </canvas>
+            <div style="margin: 10px 70px;">
+                <input id="string" type="text" />
+                <button id="load">Load</button>
+                <button id="clear">Clear</button>
+            </div>
         </div>
-        <div id="editor">
+        <div id="editor" class="area">
             <h2>Editor</h2>
             <canvas id="glyph-canvas" height="160" width="120" style="float:left; margin: 10px">
             </canvas>

@@ -291,7 +291,7 @@ class TunicGlyph {
             this.vowel.getPhonetic() + this.consonant.getPhonetic() :
             this.consonant.getPhonetic() + this.vowel.getPhonetic();
         if (phonetic.length == 0)
-            return ' ';
+            return '  ';
         return phonetic;
     }
 
@@ -306,10 +306,6 @@ class TunicGlyph {
 
 class TunicString {
     private glyphs: TunicGlyph[] = [];
-
-    public reset() {
-        this.glyphs = [];
-    }
 
     public add(glyph: TunicGlyph) {
         this.glyphs.push(glyph);
@@ -360,6 +356,26 @@ class TunicString {
             this.glyphs.splice(index, 1);
         }
     }
+    public load(value: string) {
+        this.clear();
+        const glyphDefinitions = value.split('#');
+        glyphDefinitions.forEach(element => {
+            const glyphElements = element.split('|');
+            if (glyphElements.length != 5) {
+                console.error('Could not import: Pattern invalid.');
+                return;
+            }
+            const glyph = new EditorTunicGlyph();
+            glyph.loadSegment(TunicGlyphSegment.Vowel, glyphElements[0]);
+            glyph.loadSegment(TunicGlyphSegment.Consonant, glyphElements[2]);
+            glyph.setSwap(glyphElements[4] === '1');
+            this.add(glyph.clone());
+        });
+    }
+
+    public export(): string {
+        return Array.from(this.glyphs, glyph => glyph.export()).join('#');
+    }
 }
 
 const BLACK: string = '#000';
@@ -372,6 +388,8 @@ class TunicText {
 
     private glyphCanvas: HTMLCanvasElement = {} as HTMLCanvasElement;
     private glyphContext: CanvasRenderingContext2D = {} as CanvasRenderingContext2D;
+
+    private output: HTMLInputElement = {} as HTMLInputElement;
 
     private params: URLSearchParams;
     private fontSize = new Vector2(20, 30);
@@ -394,6 +412,7 @@ class TunicText {
         this.text.draw(this.textContext, new Vector2(10, 10), this.fontSize, 3, BLACK);
 
         this.text.drawPhonetics(this.textContext, new Vector2(10, 10 + this.fontSize.y + 10), BLACK);
+        this.output.value = this.text.export();
     }
 
     public addGlyph(glyph: TunicGlyph) {
@@ -404,9 +423,19 @@ class TunicText {
     private initialize() {
         this.initializeCanvas('text-canvas', (canvas, context) => { this.textCanvas = canvas; this.textContext = context });
         this.initializeCanvas('glyph-canvas', (canvas, context) => { this.glyphCanvas = canvas; this.glyphContext = context });
+        this.output = <HTMLInputElement>document.getElementById('string');
+        const loadButton = <HTMLButtonElement>document.getElementById('load');
+        loadButton.onclick = () => this.loadString(this.output.value);
+        const clearButton = <HTMLButtonElement>document.getElementById('clear');
+        clearButton.onclick = () => this.clear();
 
         this.editor.initialize(this.glyphCanvas, this.glyphContext);
         this.textCanvas.addEventListener('mousedown', event => this.canvasMouseDown(event), false);
+    }
+
+    private loadString(value: string) {
+        this.text.load(value);
+        this.draw();
     }
 
     private canvasMouseDown(event: MouseEvent) {
@@ -624,15 +653,15 @@ class GlyphEditor {
             container.appendChild(this.createButton('Add Glyph', () => {
                 this.tunicText.addGlyph(this.glyph.clone());
             }));
+            container.appendChild(this.createButton('Add Space', () => {
+                this.tunicText.addGlyph(new TunicGlyph());
+            }));
             this.exportText = document.createElement('input');
             this.exportText.type = 'text';
             container.appendChild(this.exportText);
             container.appendChild(this.createButton('Import', () => {
                 this.glyph.import(this.exportText.value);
                 this.draw();
-            }));
-            container.appendChild(this.createButton('Clear', () => {
-                this.tunicText.clear();
             }));
             this.swapCheckbox = document.createElement('input');
             this.swapCheckbox.type = 'checkbox';
