@@ -266,7 +266,10 @@ class TunicGlyph {
     }
 
     public getPhonetic(): string {
-        return this.consonant.getPhonetic() + this.vowel.getPhonetic();
+        const phonetic = this.consonant.getPhonetic() + this.vowel.getPhonetic();
+        if (phonetic.length == 0)
+            return ' ';
+        return phonetic;
     }
 
     public clone(): TunicGlyph {
