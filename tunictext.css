@@ -16,6 +16,10 @@ main {
     justify-items: center;
 }
 
+button {
+    margin: 2px 5px;
+}
+
 #text-canvas {
     grid-area: main;
 }

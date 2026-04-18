@@ -131,12 +131,12 @@ abstract class GlyphSegment {
         return output;
     }
 
-    protected abstract getPatterns(): Map<string, string>;
+    public abstract getPatterns(): Map<string, string>;
 }
 
 class VowelGlyphSegment extends GlyphSegment {
 
-    private patterns: Map<string, string> = new Map([
+    private static patterns: Map<string, string> = new Map([
         ['110001', 'ɑː'],
         ['100001', 'o'],
         ['000110', 'ə'],
@@ -175,13 +175,17 @@ class VowelGlyphSegment extends GlyphSegment {
         return segment;
     }
 
-    protected getPatterns(): Map<string, string> {
-        return this.patterns;
+    public getPatterns(): Map<string, string> {
+        return VowelGlyphSegment.patterns;
+    }
+
+    public static getPatterns(): Map<string, string> {
+        return VowelGlyphSegment.patterns;
     }
 }
 
 class ConsonantGlyphSegment extends GlyphSegment {
-    private patterns: Map<string, string> = new Map([
+    private static patterns: Map<string, string> = new Map([
         ['0000101', '_'],
         ['0100101', 'n'],
         ['1111111', '_'],
@@ -227,8 +231,12 @@ class ConsonantGlyphSegment extends GlyphSegment {
         return segment;
     }
 
-    protected getPatterns(): Map<string, string> {
-        return this.patterns;
+    public getPatterns(): Map<string, string> {
+        return ConsonantGlyphSegment.patterns;
+    }
+
+    public static getPatterns(): Map<string, string> {
+        return ConsonantGlyphSegment.patterns;
     }
 }
 
@@ -360,6 +368,11 @@ class TunicText {
     }
 }
 
+enum TunicGlyphSegment {
+    Vowel,
+    Consonant
+}
+
 class EditorTunicGlyph extends TunicGlyph {
     public getTotalCount(out?: (vowelCount: number, consonant: number) => void): number {
         if (out != null)
@@ -391,15 +404,106 @@ class EditorTunicGlyph extends TunicGlyph {
             console.error('Could not import: Pattern invalid.');
             return;
         }
-        const vowelPattern = Array.from(splitInput[0], c => c === '1');
-        this.vowel.setLetter(splitInput[1], vowelPattern);
-        const consonantPattern = Array.from(splitInput[2], c => c === '1');
-        this.consonant.setLetter(splitInput[3], consonantPattern);
+        this.importSegment(TunicGlyphSegment.Vowel, splitInput[0], splitInput[1]);
+        this.importSegment(TunicGlyphSegment.Consonant, splitInput[2], splitInput[3]);
+    }
+
+    public loadSegment(target: TunicGlyphSegment, pattern: string) {
+        const segment = target === TunicGlyphSegment.Vowel ? this.vowel : this.consonant;
+        const data = Array.from(pattern, c => c === '1');
+        for (let index = 0; index < data.length; index++) {
+            segment.setValue(index, data[index]);
+        }
+        segment.detectPhonetic();
+    }
+
+
+    public importSegment(target: TunicGlyphSegment, input: string, key: string) {
+        const segment = target === TunicGlyphSegment.Vowel ? this.vowel : this.consonant;
+        const pattern = Array.from(input, c => c === '1');
+        segment.setLetter(key, pattern);
     }
 
     public detectPhonetics() {
         this.vowel.detectPhonetic();
         this.consonant.detectPhonetic();
+    }
+}
+
+class EditorKey {
+    private pattern: string;
+    private key: string;
+
+    private canvas: HTMLCanvasElement = {} as HTMLCanvasElement;
+    private button: HTMLButtonElement = {} as HTMLButtonElement;
+    private container: HTMLElement;
+    private keyboard: EditorKeyboard;
+    private segment: TunicGlyphSegment;
+    private glyph: EditorTunicGlyph;
+
+    public static create(keyboard: EditorKeyboard, segment: TunicGlyphSegment, pattern: string, key: string, container: HTMLElement): EditorKey {
+        const editorKey = new EditorKey(keyboard, segment, pattern, key, container);
+        editorKey.createInstance();
+        return editorKey;
+    }
+
+    private constructor(keyboard: EditorKeyboard, segment: TunicGlyphSegment, pattern: string, key: string, container: HTMLElement) {
+        this.keyboard = keyboard;
+        this.pattern = pattern;
+        this.key = key;
+        this.container = container;
+        this.segment = segment;
+        this.glyph = new EditorTunicGlyph();
+        this.glyph.importSegment(segment, pattern, key);
+    }
+
+    private createInstance() {
+        this.canvas = document.createElement('canvas');
+        this.canvas.height = 54;
+        this.canvas.width = 32;
+        this.canvas.style = "border-radius: 5px";
+        this.button = document.createElement('button');
+        this.button.onclick = () => { this.keyboard.keyPressed(this); };
+        this.button.appendChild(this.canvas);
+        this.container.appendChild(this.button);
+
+        const context = this.canvas.getContext('2d');
+        if (context == null) {
+            console.error('Could not create canvas for button');
+            return;
+        }
+        this.glyph.draw(context, new Vector2(4, 2), new Vector2(24, 36), BLACK);
+        context.textAlign = "center";
+        context.font = "10px sans-serif";
+        context.fillText(this.key, 15, 50);
+    }
+
+    public getSegment(): TunicGlyphSegment { return this.segment; }
+    public getPattern(): string { return this.pattern; }
+}
+
+class EditorKeyboard {
+    private editor: GlyphEditor;
+    private keys: EditorKey[] = [];
+
+    public constructor(editor: GlyphEditor) {
+        this.editor = editor;
+    }
+
+    public initialize(keyboardContainer: HTMLElement) {
+        keyboardContainer.style = "display: flex; flex-flow: row wrap; justify-content: center;";
+        this.createButtons(TunicGlyphSegment.Vowel, VowelGlyphSegment.getPatterns(), keyboardContainer);
+        this.createButtons(TunicGlyphSegment.Consonant, ConsonantGlyphSegment.getPatterns(), keyboardContainer);
+    }
+
+    private createButtons(segment: TunicGlyphSegment, data: Map<string, string>, container: HTMLElement) {
+        data.forEach((value: string, key: string) => {
+            this.keys.push(EditorKey.create(this, segment, key, value, container));
+        });
+    }
+
+    public keyPressed(key: EditorKey) {
+        this.editor.set(key.getSegment(), key.getPattern());
     }
 }
 
@@ -413,8 +517,11 @@ class GlyphEditor {
     private checkboxes: HTMLInputElement[] = [];
     private exportText: HTMLInputElement = {} as HTMLInputElement;
 
+    private keyboard: EditorKeyboard;
+
     public constructor(tunicText: TunicText) {
         this.tunicText = tunicText;
+        this.keyboard = new EditorKeyboard(this);
     }
 
     public initialize(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
@@ -434,22 +541,29 @@ class GlyphEditor {
         this.addContainer('Vowel', vowelSegmentCount, 0);
         this.addContainer('Constants', consonantSegmentCount, vowelSegmentCount);
 
-        const container = this.createContainer('Tools');
-        container.appendChild(this.createButton('Reset', () => { this.reset(0, vowelSegmentCount + consonantSegmentCount); }));
-        container.appendChild(this.createButton('Add Glyph', () => {
-            this.tunicText.addGlyph(this.glyph.clone());
-        }));
-        this.exportText = document.createElement('input');
-        this.exportText.type = 'text';
-        container.appendChild(this.exportText);
-        container.appendChild(this.createButton('Import', () => {
-            this.glyph.import(this.exportText.value);
-            this.draw();
-        }));
-        container.appendChild(this.createButton('Clear', () => {
-            this.tunicText.clear();
-        }));
-        this.editorControls.appendChild(container);
+        {
+            const container = this.createContainer('Tools');
+            container.appendChild(this.createButton('Reset', () => { this.reset(0, vowelSegmentCount + consonantSegmentCount); }));
+            container.appendChild(this.createButton('Add Glyph', () => {
+                this.tunicText.addGlyph(this.glyph.clone());
+            }));
+            this.exportText = document.createElement('input');
+            this.exportText.type = 'text';
+            container.appendChild(this.exportText);
+            container.appendChild(this.createButton('Import', () => {
+                this.glyph.import(this.exportText.value);
+                this.draw();
+            }));
+            container.appendChild(this.createButton('Clear', () => {
+                this.tunicText.clear();
+            }));
+            this.editorControls.appendChild(container);
+        }
+        {
+            const keyboardContainer = this.createContainer('Keyboard');
+            this.editorControls.appendChild(keyboardContainer);
+            this.keyboard.initialize(keyboardContainer);
+        }
 
         this.refreshExport();
         this.draw();
@@ -518,6 +632,15 @@ class GlyphEditor {
     private draw() {
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.glyph.drawMultiPass(this.context, new Vector2(10, 10), new Vector2(this.canvas.width - 20, this.canvas.height - 20), BLACK, GRAY, 10);
+    }
+
+    public set(segment: TunicGlyphSegment, pattern: string) {
+        this.glyph.loadSegment(segment, pattern);
+        for (let index = 0; index < this.checkboxes.length; index++) {
+            this.checkboxes[index].checked = this.glyph.getSegment(index);
+        }
+        this.refreshExport();
+        this.draw();
     }
 }
 
