@@ -32,6 +32,11 @@ button {
     height: 100%;
 }
 
+#editor h2 {
+    padding: 0px;
+    margin: 10px;
+}
+
 #editor_controls {
     display: flex;
     flex-direction: column;

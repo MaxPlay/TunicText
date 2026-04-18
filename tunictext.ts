@@ -272,10 +272,14 @@ class TunicGlyph {
     public clone(): TunicGlyph {
         return new TunicGlyph(this.vowel.clone(), this.consonant.clone());
     }
+
+    public export(): string {
+        return `${this.vowel.export()}|${this.vowel.getPhonetic()}|${this.consonant.export()}|${this.consonant.getPhonetic()}`;
+    }
 }
 
 class TunicString {
-    glyphs: TunicGlyph[] = [];
+    private glyphs: TunicGlyph[] = [];
 
     public reset() {
         this.glyphs = [];
@@ -299,8 +303,36 @@ class TunicString {
         context.font = '20px sans-serif';
         context.fillText(text, position.x, position.y + 20);
     }
+
     public clear() {
         this.glyphs = [];
+    }
+
+    private getGlyphIndex(input: Vector2, position: Vector2, size: Vector2, kerning: number): number {
+        const x = input.x;
+        const y = input.y;
+
+        for (let index = 0; index < this.glyphs.length; index++) {
+            const glyphPosition = new Vector2(position.x + (size.x + kerning) * index, position.y);
+            if (x >= glyphPosition.x && x < (glyphPosition.x + size.x) && y >= glyphPosition.y && y < (glyphPosition.y + size.y))
+                return index;
+        }
+
+        return -1;
+    }
+
+    public getGlyph(location: Vector2, position: Vector2, size: Vector2, kerning: number): TunicGlyph | undefined {
+        const index = this.getGlyphIndex(location, position, size, kerning);
+        if (index != -1) {
+            return this.glyphs[index];
+        }
+    }
+
+    public removeGlyph(location: Vector2, position: Vector2, size: Vector2, kerning: number) {
+        const index = this.getGlyphIndex(location, position, size, kerning);
+        if (index != -1) {
+            this.glyphs.splice(index, 1);
+        }
     }
 }
 
@@ -348,11 +380,21 @@ class TunicText {
         this.initializeCanvas('glyph-canvas', (canvas, context) => { this.glyphCanvas = canvas; this.glyphContext = context });
 
         this.editor.initialize(this.glyphCanvas, this.glyphContext);
+        this.textCanvas.addEventListener('mousedown', event => this.canvasMouseDown(event), false);
+    }
+
+    private canvasMouseDown(event: MouseEvent) {
+        event.preventDefault();
+        const rawX = event.pageX - this.textCanvas.offsetLeft + this.textCanvas.clientLeft;
+        const rawY = event.pageY - this.textCanvas.offsetTop + this.textCanvas.clientTop;
+        const location = new Vector2(rawX, rawY);
+        this.editor.canvasMouseDown(location, event.button);
     }
 
     private initializeCanvas(id: string, out: (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => void) {
-        let canvas = <HTMLCanvasElement>document.getElementById(id);
-        let context = canvas.getContext('2d');
+        const canvas = <HTMLCanvasElement>document.getElementById(id);
+        canvas.oncontextmenu = () => false;
+        const context = canvas.getContext('2d');
         if (context == null) {
             console.error('Could not create context');
             return;
@@ -365,6 +407,14 @@ class TunicText {
     public clear() {
         this.text.clear();
         this.draw();
+    }
+
+    public deleteClickedGlyph(location: Vector2) {
+        this.text.removeGlyph(location, new Vector2(10, 10), this.fontSize, 3);
+        this.draw();
+    }
+    public getClickedGlyph(location: Vector2): TunicGlyph | undefined {
+        return this.text.getGlyph(location, new Vector2(10, 10), this.fontSize, 3);
     }
 }
 
@@ -392,10 +442,6 @@ class EditorTunicGlyph extends TunicGlyph {
             this.vowel.setValue(index, value);
         else
             this.consonant.setValue(index - this.vowel.getCount(), value);
-    }
-
-    public export(): string {
-        return `${this.vowel.export()}|${this.vowel.getPhonetic()}|${this.consonant.export()}|${this.consonant.getPhonetic()}`;
     }
 
     public import(input: string) {
@@ -634,13 +680,31 @@ class GlyphEditor {
         this.glyph.drawMultiPass(this.context, new Vector2(10, 10), new Vector2(this.canvas.width - 20, this.canvas.height - 20), BLACK, GRAY, 10);
     }
 
+    public canvasMouseDown(location: Vector2, button: number) {
+        if (button == 0) {
+            const glyph = this.tunicText.getClickedGlyph(location);
+            if (glyph != undefined) {
+                this.glyph.import(glyph.export());
+                this.updateCheckboxes();
+                this.refreshExport();
+                this.draw();
+            }
+        } else if (button == 2) {
+            this.tunicText.deleteClickedGlyph(location);
+        }
+    }
+
     public set(segment: TunicGlyphSegment, pattern: string) {
         this.glyph.loadSegment(segment, pattern);
+        this.updateCheckboxes();
+        this.refreshExport();
+        this.draw();
+    }
+
+    private updateCheckboxes() {
         for (let index = 0; index < this.checkboxes.length; index++) {
             this.checkboxes[index].checked = this.glyph.getSegment(index);
         }
-        this.refreshExport();
-        this.draw();
     }
 }
 
