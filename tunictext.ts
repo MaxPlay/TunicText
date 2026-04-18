@@ -59,6 +59,7 @@ const TOP_RIGHT_ANCHOR = new Vector2(1, 0.2);
 const BOTTOM_RIGHT_ANCHOR = new Vector2(1, 0.8);
 const INNER_TOP_ANCHOR = new Vector2(0.5, 0.35);
 const INNER_BOTTOM_ANCHOR = new Vector2(0.5, 0.65);
+const SWAP_MARKER_RADIUS = 0.1;
 
 abstract class GlyphSegment {
     protected mapping: boolean[];
@@ -243,41 +244,63 @@ class ConsonantGlyphSegment extends GlyphSegment {
 class TunicGlyph {
     protected vowel: VowelGlyphSegment;
     protected consonant: ConsonantGlyphSegment;
+    protected swap: boolean;
 
-    public constructor(vowel?: VowelGlyphSegment, consonant?: ConsonantGlyphSegment) {
+    public constructor(vowel?: VowelGlyphSegment, consonant?: ConsonantGlyphSegment, swap?: boolean) {
         this.vowel = vowel ?? new VowelGlyphSegment();
         this.consonant = consonant ?? new ConsonantGlyphSegment();
+        this.swap = swap ?? false;
     }
 
     public draw(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, color: string, lineWidth = 2) {
         context.lineWidth = lineWidth;
-        context.lineCap = "round";
+        context.lineCap = 'round';
         this.vowel.draw(context, position, size, color, true);
         this.consonant.draw(context, position, size, color, true);
+        if (this.swap) {
+            this.drawSwap(context, size, position);
+        }
+    }
+
+    private drawSwap(context: CanvasRenderingContext2D, size: Vector2, position: Vector2) {
+        context.beginPath();
+        const radius = new Vector2(SWAP_MARKER_RADIUS * size.x, SWAP_MARKER_RADIUS * size.y);
+        context.ellipse(position.x + BOTTOM_ANCHOR.x * size.x, position.y + BOTTOM_ANCHOR.y * size.y + radius.y, radius.x, radius.x, 0, 0, Math.PI * 2);
+        context.stroke();
     }
 
     public drawMultiPass(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, activeColor: string, inactiveColor: string, lineWidth = 2) {
         context.lineWidth = lineWidth;
-        context.lineCap = "round";
+        context.lineCap = 'round';
         this.vowel.draw(context, position, size, inactiveColor, false);
         this.consonant.draw(context, position, size, inactiveColor, false);
+        if (!this.swap) {
+            context.strokeStyle = inactiveColor;
+            this.drawSwap(context, size, position);
+        }
         this.vowel.draw(context, position, size, activeColor, true);
         this.consonant.draw(context, position, size, activeColor, true);
+        if (this.swap) {
+            context.strokeStyle = activeColor;
+            this.drawSwap(context, size, position);
+        }
     }
 
     public getPhonetic(): string {
-        const phonetic = this.consonant.getPhonetic() + this.vowel.getPhonetic();
+        const phonetic = this.swap ?
+            this.vowel.getPhonetic() + this.consonant.getPhonetic() :
+            this.consonant.getPhonetic() + this.vowel.getPhonetic();
         if (phonetic.length == 0)
             return ' ';
         return phonetic;
     }
 
     public clone(): TunicGlyph {
-        return new TunicGlyph(this.vowel.clone(), this.consonant.clone());
+        return new TunicGlyph(this.vowel.clone(), this.consonant.clone(), this.swap);
     }
 
     public export(): string {
-        return `${this.vowel.export()}|${this.vowel.getPhonetic()}|${this.consonant.export()}|${this.consonant.getPhonetic()}`;
+        return `${this.vowel.export()}|${this.vowel.getPhonetic()}|${this.consonant.export()}|${this.consonant.getPhonetic()}|${this.swap ? '1' : '0'}`;
     }
 }
 
@@ -447,14 +470,18 @@ class EditorTunicGlyph extends TunicGlyph {
             this.consonant.setValue(index - this.vowel.getCount(), value);
     }
 
+    public getSwap(): boolean { return this.swap; }
+    public setSwap(value: boolean) { this.swap = value; }
+
     public import(input: string) {
         const splitInput = input.split('|');
-        if (splitInput.length != 4) {
+        if (splitInput.length != 5) {
             console.error('Could not import: Pattern invalid.');
             return;
         }
         this.importSegment(TunicGlyphSegment.Vowel, splitInput[0], splitInput[1]);
         this.importSegment(TunicGlyphSegment.Consonant, splitInput[2], splitInput[3]);
+        this.swap = splitInput[4] == '1';
     }
 
     public loadSegment(target: TunicGlyphSegment, pattern: string) {
@@ -567,6 +594,7 @@ class GlyphEditor {
     private exportText: HTMLInputElement = {} as HTMLInputElement;
 
     private keyboard: EditorKeyboard;
+    private swapCheckbox: HTMLInputElement = {} as HTMLInputElement;
 
     public constructor(tunicText: TunicText) {
         this.tunicText = tunicText;
@@ -592,7 +620,7 @@ class GlyphEditor {
 
         {
             const container = this.createContainer('Tools');
-            container.appendChild(this.createButton('Reset', () => { this.reset(0, vowelSegmentCount + consonantSegmentCount); }));
+            container.appendChild(this.createButton('Reset', () => { this.reset(0, vowelSegmentCount + consonantSegmentCount, true); }));
             container.appendChild(this.createButton('Add Glyph', () => {
                 this.tunicText.addGlyph(this.glyph.clone());
             }));
@@ -606,6 +634,15 @@ class GlyphEditor {
             container.appendChild(this.createButton('Clear', () => {
                 this.tunicText.clear();
             }));
+            this.swapCheckbox = document.createElement('input');
+            this.swapCheckbox.type = 'checkbox';
+            this.swapCheckbox.name = 'swap';
+            this.swapCheckbox.onclick = () => { this.toggleSwap(); };
+            container.appendChild(this.swapCheckbox);
+            const label = document.createElement('label');
+            label.setAttribute('for', 'swap');
+            label.innerText = 'Swap vowel and consonant'
+            container.appendChild(label);
             this.editorControls.appendChild(container);
         }
         {
@@ -614,6 +651,13 @@ class GlyphEditor {
             this.keyboard.initialize(keyboardContainer);
         }
 
+        this.refreshExport();
+        this.draw();
+    }
+
+    private toggleSwap() {
+        this.glyph.setSwap(!this.glyph.getSwap());
+        this.updateCheckboxes();
         this.refreshExport();
         this.draw();
     }
@@ -635,7 +679,7 @@ class GlyphEditor {
             label.innerText = index.toString();
             container.appendChild(label);
         }
-        const resetButton = this.createButton('Reset', () => { this.reset(indexOffset, indexOffset + count); });
+        const resetButton = this.createButton('Reset', () => { this.reset(indexOffset, indexOffset + count, false); });
         container.appendChild(resetButton);
         this.editorControls.appendChild(container);
     }
@@ -664,12 +708,14 @@ class GlyphEditor {
         this.draw();
     }
 
-    private reset(start: number, end: number) {
+    private reset(start: number, end: number, resetSwap: boolean) {
         for (let index = start; index < end; index++) {
             this.glyph.setSegment(index, false);
-            this.checkboxes[index].checked = false;
         }
+        if (resetSwap)
+            this.glyph.setSwap(false);
         this.glyph.detectPhonetics();
+        this.updateCheckboxes();
         this.refreshExport();
         this.draw();
     }
@@ -680,7 +726,7 @@ class GlyphEditor {
 
     private draw() {
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.glyph.drawMultiPass(this.context, new Vector2(10, 10), new Vector2(this.canvas.width - 20, this.canvas.height - 20), BLACK, GRAY, 10);
+        this.glyph.drawMultiPass(this.context, new Vector2(10, 10), new Vector2(this.canvas.width - 20, this.canvas.height - 30), BLACK, GRAY, 10);
     }
 
     public canvasMouseDown(location: Vector2, button: number) {
@@ -708,6 +754,7 @@ class GlyphEditor {
         for (let index = 0; index < this.checkboxes.length; index++) {
             this.checkboxes[index].checked = this.glyph.getSegment(index);
         }
+        this.swapCheckbox.checked = this.glyph.getSwap();
     }
 }
 
