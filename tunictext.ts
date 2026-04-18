@@ -141,7 +141,7 @@ class VowelGlyphSegment extends GlyphSegment {
         ['110001', 'ɑː'],
         ['100001', 'o'],
         ['000110', 'ə'],
-        ['000111', '_'],
+        ['000111', 'ə'],
         ['000011', 'u'],
         ['110000', 'ə'],
         ['100111', 'ɪ'],
@@ -153,7 +153,7 @@ class VowelGlyphSegment extends GlyphSegment {
         ['100000', 'eɪ'],
         ['010000', 'aɪ'],
         ['000010', '_'],
-        ['000100', '_'],
+        ['000100', 'aʊ'],
         ['110111', 'oʊ'],
         ['000101', '_'],
     ]);
@@ -187,7 +187,7 @@ class VowelGlyphSegment extends GlyphSegment {
 
 class ConsonantGlyphSegment extends GlyphSegment {
     private static patterns: Map<string, string> = new Map([
-        ['0000101', '_'],
+        ['0000101', 'm'],
         ['0100101', 'n'],
         ['1111111', '_'],
         ['1001010', 'p'],
