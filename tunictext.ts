@@ -140,22 +140,22 @@ class VowelGlyphSegment extends GlyphSegment {
     private static patterns: Map<string, string> = new Map([
         ['110001', 'ɑː'],
         ['100001', 'o'],
-        ['000110', 'ə'],
+        ['000110', 'ɪ'],
         ['000111', 'ə'],
         ['000011', 'u'],
-        ['110000', 'ə'],
+        ['110000', 'ɒ'],
         ['100111', 'ɪ'],
         ['110011', 'uː'],
-        ['010111', '_'],
-        ['110101', '_'],
-        ['110110', '_'],
-        ['100101', '_'],
+        ['010111', 'ə'],
+        ['110101', 'ʊ'],
+        ['110110', 'ɑː'],
+        ['100101', 'ɔː'],
         ['100000', 'eɪ'],
         ['010000', 'aɪ'],
-        ['000010', '_'],
+        ['000010', 'ɔɪ'],
         ['000100', 'aʊ'],
         ['110111', 'oʊ'],
-        ['000101', '_'],
+        ['000101', 'eə'],
     ]);
 
     constructor() {
@@ -189,7 +189,7 @@ class ConsonantGlyphSegment extends GlyphSegment {
     private static patterns: Map<string, string> = new Map([
         ['0000101', 'm'],
         ['0100101', 'n'],
-        ['1111111', '_'],
+        ['1111111', 'ŋ'],
         ['1001010', 'p'],
         ['1010001', 'b'],
         ['1101010', 't'],
@@ -197,10 +197,10 @@ class ConsonantGlyphSegment extends GlyphSegment {
         ['1011001', 'k'],
         ['1001011', 'g'],
         ['1010100', 'dʒ'],
-        ['1100010', '_'],
+        ['1100010', 'tʃ'],
         ['1001110', 'f'],
-        ['1110001', '_'],
-        ['1111010', '_'],
+        ['1110001', 'v'],
+        ['1111010', 'θ'],
         ['1010111', 'ð'],
         ['1011110', 's'],
         ['1110011', 'z'],
@@ -208,7 +208,7 @@ class ConsonantGlyphSegment extends GlyphSegment {
         ['1111101', '_'],
         ['1010011', 'h'],
         ['1011010', 'r'],
-        ['1100010', 'j'],
+        ['1110010', 'j'],
         ['0101000', 'v'],
         ['1010010', 'l'],
     ]);
@@ -304,6 +304,8 @@ class TunicGlyph {
     }
 }
 
+const MAX_TEXT_WIDTH = 720;
+
 class TunicString {
     private glyphs: TunicGlyph[] = [];
 
@@ -312,18 +314,38 @@ class TunicString {
     }
 
     public draw(context: CanvasRenderingContext2D, position: Vector2, size: Vector2, kerning: number, color: string) {
+        let line = 0;
+        let lineIndex = 0;
         for (let index = 0; index < this.glyphs.length; index++) {
             const glyph = this.glyphs[index];
-            const glyphPosition = new Vector2(position.x + (size.x + kerning) * index, position.y);
+            const glyphPosition = new Vector2(position.x + (size.x + kerning) * (index - lineIndex), position.y + line * (size.y + 15));
             glyph.draw(context, glyphPosition, size, color);
+            if (glyphPosition.x + size.x > MAX_TEXT_WIDTH) {
+                line++;
+                lineIndex = index + 1;
+            }
         }
     }
 
     public drawPhonetics(context: CanvasRenderingContext2D, position: Vector2, color: string) {
-        const text = Array.from(this.glyphs, glyph => glyph.getPhonetic()).join('');
+        const text = this.getPhonetics();
         context.fillStyle = color;
         context.font = '20px sans-serif';
-        context.fillText(text, position.x, position.y + 20);
+        const textMetrics = context.measureText(text);
+        if (textMetrics.width < MAX_TEXT_WIDTH) {
+            context.fillText(text, position.x, position.y + 20);
+        }
+        else {
+            const charWidth = textMetrics.width / text.length;
+            const maxLineLength = MAX_TEXT_WIDTH / charWidth;
+            let renderedText = text;
+            let line = 1;
+            while (renderedText.length > 0) {
+                context.fillText(renderedText.substring(0, maxLineLength), position.x, position.y + 20 * line);
+                renderedText = renderedText.substring(maxLineLength);
+                line++;
+            }
+        }
     }
 
     public clear() {
@@ -334,8 +356,14 @@ class TunicString {
         const x = input.x;
         const y = input.y;
 
+        let line = 0;
+        let lineIndex = 0;
         for (let index = 0; index < this.glyphs.length; index++) {
-            const glyphPosition = new Vector2(position.x + (size.x + kerning) * index, position.y);
+            const glyphPosition = new Vector2(position.x + (size.x + kerning) * (index - lineIndex), position.y + line * (size.y + 15));
+            if (glyphPosition.x + size.x > MAX_TEXT_WIDTH) {
+                line++;
+                lineIndex = index + 1;
+            }
             if (x >= glyphPosition.x && x < (glyphPosition.x + size.x) && y >= glyphPosition.y && y < (glyphPosition.y + size.y))
                 return index;
         }
@@ -376,6 +404,10 @@ class TunicString {
     public export(): string {
         return Array.from(this.glyphs, glyph => glyph.export()).join('#');
     }
+
+    public getPhonetics(): string {
+        return Array.from(this.glyphs, glyph => glyph.getPhonetic()).join('');
+    }
 }
 
 const BLACK: string = '#000';
@@ -390,6 +422,7 @@ class TunicText {
     private glyphContext: CanvasRenderingContext2D = {} as CanvasRenderingContext2D;
 
     private output: HTMLInputElement = {} as HTMLInputElement;
+    private outputPhonetics: HTMLInputElement = {} as HTMLInputElement;
 
     private params: URLSearchParams;
     private fontSize = new Vector2(20, 30);
@@ -411,8 +444,9 @@ class TunicText {
         this.textContext.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
         this.text.draw(this.textContext, new Vector2(10, 10), this.fontSize, 3, BLACK);
 
-        this.text.drawPhonetics(this.textContext, new Vector2(10, 10 + this.fontSize.y + 10), BLACK);
+        this.text.drawPhonetics(this.textContext, new Vector2(10, 200 + this.fontSize.y), BLACK);
         this.output.value = this.text.export();
+        this.outputPhonetics.value = this.text.getPhonetics().replace(/ +(?= )/g, '');
     }
 
     public addGlyph(glyph: TunicGlyph) {
@@ -428,6 +462,7 @@ class TunicText {
         loadButton.onclick = () => this.loadString(this.output.value);
         const clearButton = <HTMLButtonElement>document.getElementById('clear');
         clearButton.onclick = () => this.clear();
+        this.outputPhonetics = <HTMLInputElement>document.getElementById('phonetics');
 
         this.editor.initialize(this.glyphCanvas, this.glyphContext);
         this.textCanvas.addEventListener('mousedown', event => this.canvasMouseDown(event), false);
@@ -605,6 +640,9 @@ class EditorKeyboard {
         data.forEach((value: string, key: string) => {
             this.keys.push(EditorKey.create(this, segment, key, value, container));
         });
+        const lineWrap = document.createElement('div');
+        lineWrap.style = "flex-basis: 100%; height: 0;";
+        container.appendChild(lineWrap);
     }
 
     public keyPressed(key: EditorKey) {
