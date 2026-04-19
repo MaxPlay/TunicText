@@ -9,7 +9,7 @@ class Vector2 {
 
     public add(other: Vector2) {
         this.x += other.x;
-        this.y += other.y;
+        this.y += other.y;        
     }
 
     public subtract(other: Vector2) {
