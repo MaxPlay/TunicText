@@ -1,5 +1,7 @@
 # Tunic Text
 
+[![Deploy Tunic Text](https://github.com/MaxPlay/TunicText/actions/workflows/deploy.yml/badge.svg?branch=live)](https://github.com/MaxPlay/TunicText/actions/workflows/deploy.yml)
+
 Small web application that contains a keyboard for writing the text in tunic. I created this to help me translate the text throughout the game.
 
 # Installation
