@@ -4,7 +4,7 @@ run-name: 'Deploying the 🦊 keyboard'
 # Triggers
 on:
   push:
-    branches['test']
+    branches: ['test']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
