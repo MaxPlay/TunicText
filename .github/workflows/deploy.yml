@@ -25,6 +25,8 @@ jobs:
         run: npm ci & npm run build
       - name: 'upload'
         uses: actions/upload-pages-artifact@v4
+        with:
+          path: '.'
   deploy:
     name: 'Deploy'
     needs: build
