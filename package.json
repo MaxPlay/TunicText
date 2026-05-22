@@ -1,0 +1,23 @@
+{
+    "name": "tunic-text",
+    "version": "1.0.0",
+    "description": "Small web application that contains a keyboard for writing the text in tunic.",
+    "author": "MaxPlay",
+    "main": "tunictext.ts",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "build": "tsc"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/MaxPlay/TunicText.git"
+    },
+    "keywords": [
+        "tunic",
+        "typescript"
+    ],
+    "license": "MIT",
+    "devDependencies": {
+        "typescript": "^6.0.3"
+    }
+}
