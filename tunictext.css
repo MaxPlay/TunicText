@@ -55,3 +55,10 @@ button {
     border-radius: 20px;
     margin: 5px;
 }
+
+.github-link {
+    position: fixed;
+    right: 0px;
+    top: 0px;
+    margin: 10px;
+}

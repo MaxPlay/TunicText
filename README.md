@@ -1,8 +1,9 @@
 # Tunic Text
 
-[![Deploy Tunic Text](https://github.com/MaxPlay/TunicText/actions/workflows/deploy.yml/badge.svg?branch=live)](https://github.com/MaxPlay/TunicText/actions/workflows/deploy.yml)
+[![Deploy Tunic Text](https://github.com/MaxPlay/TunicText/actions/workflows/deploy.yml/badge.svg?branch=live)](https://github.com/MaxPlay/TunicText/actions/workflows/deploy.yml) ![GitHub License](https://img.shields.io/github/license/MaxPlay/TunicText) [![Static Badge](https://img.shields.io/badge/github_pages-Tunic_Text-red?logo=github)](https://maxplay.github.io/TunicText/)
 
-Small web application that contains a keyboard for writing the text in tunic. I created this to help me translate the text throughout the game.
+
+Small web application that contains a keyboard for writing the text found in the game TUNIC. I created this to help me translate the text throughout the game.
 
 # Installation
 
